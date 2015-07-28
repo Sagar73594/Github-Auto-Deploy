@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-import json, urlparse, sys, os, ssl
+import json, urlparse, sys, os, ssl, contextlib, daemon
 from BaseHTTPServer import BaseHTTPRequestHandler, HTTPServer
 from subprocess import call
 
@@ -115,12 +115,6 @@ def main():
             if(arg == '-q' or arg == '--quiet'):
                 GitAutoDeploy.quiet = True
 
-        if(GitAutoDeploy.daemon):
-            pid = os.fork()
-            if(pid != 0):
-                sys.exit()
-            os.setsid()
-
         if(not GitAutoDeploy.quiet):
             print 'Github Autodeploy Service v0.2 started'
         else:
@@ -128,7 +122,15 @@ def main():
 
         server = HTTPServer(('', GitAutoDeploy.getConfig()['port']), GitAutoDeploy)
         server.socket = ssl.wrap_socket(server.socket, certfile=GitAutoDeploy.getConfig()['certfile'], keyfile=GitAutoDeploy.getConfig()['keyfile'], server_side=True)
-        server.serve_forever()
+
+        if(GitAutoDeploy.daemon):
+            daemon_context = daemon.DaemonContext()
+            daemon_context.files_preserve = [server.fileno()]
+            with daemon_context:
+                server.serve_forever()
+        else:
+            server.serve_forever()
+
     except (KeyboardInterrupt, SystemExit) as e:
         if(e): # wtf, why is this creating a new line?
             print >> sys.stderr, e
